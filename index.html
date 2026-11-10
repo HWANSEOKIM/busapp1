@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>국민대 버스 혼잡도 · 하차정보</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f6f9;--card:#fff;--tx:#1b2430;--sub:#6b7686;--line:#e3e8ef;--pri:#1e5eff;
+--c1:#22a35a;--c2:#e0a800;--c3:#f06a1d;--c4:#d93636;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10151c;--card:#1a212b;--tx:#e8edf4;--sub:#93a0b3;--line:#2a3340;--pri:#6b95ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10151c;--card:#1a212b;--tx:#e8edf4;--sub:#93a0b3;--line:#2a3340;--pri:#6b95ff;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;line-height:1.45}
+main{max-width:480px;margin:0 auto;padding:16px}
+h1{font-size:19px;margin:4px 0 2px}
+.sub{color:var(--sub);font-size:13px}
+.nav{display:flex;gap:6px;background:var(--line);border-radius:12px;padding:4px;margin-top:12px}
+.nav a{flex:1;text-align:center;padding:9px 0;border-radius:9px;color:var(--sub);text-decoration:none;font-weight:700;font-size:14px}
+.nav a.on{background:var(--card);color:var(--pri)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+.tabs{display:flex;gap:8px;margin-top:12px}
+.tab{flex:1;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;padding:10px 0;font-size:16px;font-weight:700;cursor:pointer}
+.tab[aria-selected=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
+label{font-size:13px;color:var(--sub);display:block;margin:10px 0 4px}
+select,button.act{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--tx);font-size:15px}
+button.act{background:var(--pri);color:#fff;border:0;font-weight:700;cursor:pointer;margin-top:14px}
+button.del{border:1px solid var(--line);background:none;color:var(--c4);border-radius:8px;padding:4px 10px;cursor:pointer}
+.bus{display:flex;gap:12px;align-items:flex-start}
+.badge{min-width:68px;text-align:center;border-radius:10px;padding:8px 4px;color:#fff;font-weight:700;font-size:14px}
+.l1{background:var(--c1)}.l2{background:var(--c2)}.l3{background:var(--c3)}.l4{background:var(--c4)}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%}
+.info{font-size:14px;margin-top:4px}
+.warn{background:rgba(217,54,54,.1);border:1px solid var(--c4);border-radius:10px;padding:10px;font-size:14px;margin-top:10px}
+.rec{background:rgba(34,163,90,.1);border:1px solid var(--c1);border-radius:10px;padding:10px;font-size:14px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:6px 4px;border-bottom:1px solid var(--line)}
+td:last-child{text-align:right}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.seg{display:flex;gap:6px;margin-top:8px}.seg button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:10px;padding:8px 4px;font-size:13px;cursor:pointer}.seg button[aria-selected=true]{background:var(--pri);color:#fff;border-color:var(--pri)}
+.path{font-size:12px;color:var(--sub);margin-top:6px}.path b{color:var(--pri)}
+.tag{background:var(--pri);color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;margin-left:4px}
+.note{font-size:12px;color:var(--sub);margin-top:10px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>🚌 국민대 버스 혼잡도</h1>
+<div class="sub">프로토타입 · 예시 데이터</div>
+<div class="sub" id="top-conn" style="margin-top:4px"></div>
+<nav class="nav">
+  <a href="#status" id="n-status">① 혼잡도·하차 현황</a>
+  <a href="#register" id="n-register">② 하차 정류장 등록</a>
+</nav>
+<div id="view"></div>
+</main>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ====== Firebase 설정: Firebase 콘솔의 값으로 교체하세요 ======
+const FIREBASE_CONFIG={
+  apiKey:"여기에_apiKey",
+  authDomain:"여기에_프로젝트ID.firebaseapp.com",
+  databaseURL:"여기에_databaseURL",
+  projectId:"여기에_프로젝트ID",
+  appId:"여기에_appId"
+};
+const LINK=location.href.split("#")[0].split("?")[0];
+// ===== 노선 설정 (국민대학교 주변 3개 노선, 방면별) =====
+// 국민대학교 = 국민대학교앞 = 국민대앞 (같은 정류장). ref = 그 정류장의 위치(인덱스)
+const S_A=["고려대사범대학부속고등학교","청덕초등학교입구","국민대학교앞","롯데아파트","평창동주민센터","세검정초등학교"];
+const S_B=["롯데아파트","평창동삼성아파트","국민대학교앞","청덕초등학교입구","고려대사범대학부속고등학교","정릉3동주민센터앞"];
+const ROUTES={
+ "1020":[{name:"광화문 방면",sub:"정릉 ➔ 광화문",g:"P",ref:2,stops:S_A},{name:"정릉 방면",sub:"광화문 ➔ 정릉",g:"J",ref:2,stops:S_B}],
+ "1711":[{name:"광화문·공덕 방면",sub:"정릉 ➔ 공덕",g:"P",ref:2,stops:S_A},{name:"정릉 방면",sub:"공덕 ➔ 정릉",g:"J",ref:2,stops:S_B}],
+ "7211":[{name:"정릉·길음·신설동 방면",sub:"구파발 ➔ 신설동",g:"J",ref:2,stops:["평창동주민센터","롯데아파트","국민대학교앞","청덕초등학교입구","고대사대부고(북악중)","봉국사"]},
+         {name:"구기동·연신내·구파발 방면",sub:"신설동 ➔ 구파발",g:"P",ref:3,stops:["봉국사","고대사대부고(북악중)","청덕초등학교입구","국민대학교앞","롯데아파트","평창동주민센터"]}]
+};
+const CAP=70, SEATS=27;
+const LEVELS=[{max:40,cls:"l1",name:"여유",col:"var(--c1)"},{max:70,cls:"l2",name:"보통",col:"var(--c2)"},{max:95,cls:"l3",name:"혼잡",col:"var(--c3)"},{max:999,cls:"l4",name:"만차",col:"var(--c4)"}];
+const lvl=p=>LEVELS.find(l=>p<=l.max);
+const key=(r,d)=>r+"|"+d;
+let seed=7; const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+const BUSES={};
+Object.keys(ROUTES).forEach(r=>ROUTES[r].forEach((D,d)=>{
+  BUSES[key(r,d)]=[0,1].map(i=>{
+    const drops={}; for(let s=D.ref;s<D.stops.length;s++) drops[s]=s===D.ref?1+Math.floor(rnd()*4):Math.floor(rnd()*3);
+    const pct=(r==="1020"&&d===0&&i===0)?98:Math.floor(25+rnd()*65);
+    return {id:key(r,d)+"-"+i,no:i+1,eta:2+i*6+Math.floor(rnd()*3),pct,drops};
+  });
+}));
+let LIVE=[];
+const CID=Math.random().toString(36).slice(2,10); let FB=null, ONLINE=false, PEERS=0;
+const PASS="kookmin"; // 시연 입장 코드 (여기서 변경)
+const liveCount=(r,d,bi,s)=>LIVE.filter(x=>x.route===r&&x.dir===d&&x.bus===bi&&x.stop===s).length;
+const dropsOf=(r,d,bi,s)=>BUSES[key(r,d)][bi].drops[s]+liveCount(r,d,bi,s);
+let curRoute="1020", curDir=0;
+const $=id=>document.getElementById(id);
+
+// ----- 페이지 ② 하차 정류장 등록 -----
+function viewRegister(){
+  $("view").innerHTML=`
+  <div class="card"><b>하차 정류장 등록</b>
+    <div class="sub">탑승 중인 버스와 내릴 정류장을 알려주세요. 다른 승객의 혼잡도·착석 예측에 반영됩니다.</div>
+    <label for="myroute">탑승 노선</label><select id="myroute">${Object.keys(ROUTES).map(r=>`<option>${r}</option>`).join("")}</select>
+    <label for="mydir">방면</label><select id="mydir"></select>
+    <label for="mybus">탑승한 버스</label><select id="mybus"></select>
+    <label for="mydrop">내릴 정류장</label><select id="mydrop"></select>
+    <button class="act" id="submitDrop">등록하기</button></div>
+  <div class="card"><b>실시간 하차 등록 현황</b> <span class="sub" id="conn"></span><div id="mine"></div></div>`;
+  const fillDir=()=>{const r=$("myroute").value;
+    $("mydir").innerHTML=ROUTES[r].map((D,i)=>`<option value="${i}">${D.name} (${D.sub})</option>`).join(""); fill();};
+  const fill=()=>{
+    const r=$("myroute").value,d=+$("mydir").value,D=ROUTES[r][d];
+    $("mybus").innerHTML=BUSES[key(r,d)].map((b,i)=>`<option value="${i}">${r}번 ${b.no}호차 (${b.eta}분 후)</option>`).join("");
+    $("mydrop").innerHTML=D.stops.map((n,i)=>i>=D.ref?`<option value="${i}">${n}</option>`:"").join("");
+  };
+  $("myroute").onchange=fillDir; $("mydir").onchange=fill; fillDir();
+  $("submitDrop").onclick=async()=>{
+    const r=$("myroute").value,d=+$("mydir").value,bi=+$("mybus").value,idx=+$("mydrop").value;
+    const rec={route:r,dir:d,bus:bi,stop:idx,ts:Date.now()};
+    try{
+      if(FB){const r0=FB.ref("drops/"+CID); r0.onDisconnect().remove(); await r0.set(rec);}
+      else {LIVE=LIVE.filter(x=>x.id!==CID); LIVE.push({id:CID,...rec}); refresh();}
+      toast(`${r}번 · ${ROUTES[r][d].stops[idx]} 하차 등록 완료`);
+    }catch(e){toast("등록 실패: 잠시 후 다시 시도해 주세요");}
+  };
+  renderMine(); setConn();
+}
+async function cancelMine(){
+  try{ if(FB) await FB.ref("drops/"+CID).remove(); else {LIVE=LIVE.filter(x=>x.id!==CID); refresh();} toast("등록을 취소했어요"); }catch(e){toast("취소 실패");}
+}
+function feedHtml(){
+  const L=LIVE.filter(x=>ROUTES[x.route]&&ROUTES[x.route][x.dir]&&BUSES[key(x.route,x.dir)][x.bus]);
+  if(!L.length) return `<div class="note">아직 등록된 하차 정보가 없어요.</div>`;
+  return [...L].sort((a,b)=>b.ts-a.ts).map(x=>{
+    const me=x.id===CID, D=ROUTES[x.route][x.dir];
+    return `<div class="row"><span>${x.route}번 ${D.name} ${BUSES[key(x.route,x.dir)][x.bus].no}호차 → <b>${D.stops[x.stop]}</b> 하차 ${me?'<span class="tag">나</span>':''}</span>${me?'<button class="del" data-cancel="1">취소</button>':''}</div>`;
+  }).join("");
+}
+function renderMine(){
+  const el=$("mine"); if(!el)return;
+  el.innerHTML=feedHtml();
+  el.onclick=e=>{ if(e.target.dataset.cancel) cancelMine(); };
+}
+function refresh(){ if(location.hash==="#register") renderMine(); else if($("buses")) renderBuses(); }
+
+// ----- 페이지 ① 혼잡도·하차 현황 -----
+function seatForecast(b,r,d){
+  const D=ROUTES[r][d], st=D.stops, bi=b.no-1, REF=D.ref;
+  const pass=Math.round(CAP*b.pct/100)-dropsOf(r,d,bi,REF); // 국민대학교앞에서 내리는 승객 제외
+  const standing=Math.max(0,pass-SEATS);
+  if(!standing) return "국민대학교앞에서 타면 앉을 자리가 있어요 💺";
+  let cum=0;
+  for(let s=REF+1;s<st.length;s++){cum+=dropsOf(r,d,bi,s); if(cum>=standing+1) return `국민대학교앞 탑승 기준, 약 ${s-REF}정거장 뒤(${st[s]})부터 앉을 수 있어요`;}
+  return "국민대학교앞 탑승 시 끝까지 서서 갈 가능성이 커요";
+}
+function recommend(r0,d0,cur){
+  const g=ROUTES[r0][d0].g; let best=null;
+  Object.keys(ROUTES).forEach(r=>ROUTES[r].forEach((D,d)=>{ if(D.g!==g)return;
+    BUSES[key(r,d)].forEach(b=>{ if(b.id===cur.id||b.pct>95)return; if(!best||b.pct<best.pct) best={route:r,dirName:D.name,eta:b.eta,pct:b.pct,no:b.no}; });}));
+  return best;
+}
+function viewStatus(){
+  $("view").innerHTML=`<div class="tabs" id="tabs">${Object.keys(ROUTES).map(r=>`<button class="tab" data-r="${r}">${r}</button>`).join("")}</div>
+  <div class="seg" id="seg"></div>
+  <div id="buses"></div>
+  <div class="card"><b>실시간 하차 등록 현황</b> <span class="sub" id="conn"></span><div id="feed"></div></div>
+  <div class="card"><b>혼잡도 기준</b><table>
+    <tr><td><span class="dot l1"></span>여유</td><td>탑승률 0~40%</td><td>앉을 자리 충분</td></tr>
+    <tr><td><span class="dot l2"></span>보통</td><td>41~70%</td><td>일부 좌석 가능</td></tr>
+    <tr><td><span class="dot l3"></span>혼잡</td><td>71~95%</td><td>서서 이동</td></tr>
+    <tr><td><span class="dot l4"></span>만차</td><td>96% 이상</td><td>다음 차 권장</td></tr></table>
+    <div class="note">※ 노선·정류장은 실제 기준이고, 혼잡도·승객 수는 시연용 예시입니다.</div></div>
+  <div class="card" style="text-align:center"><b>📱 QR로 참여하기</b><div class="sub">휴대폰 카메라로 스캔하면 이 앱이 열려요</div><div id="qr" style="display:inline-block;background:#fff;padding:10px;border-radius:10px;margin-top:10px"></div><div class="note">입장 코드: ${PASS}</div></div>`;
+  $("tabs").onclick=e=>{const r=e.target.dataset.r; if(r){curRoute=r;curDir=0;renderBuses();}};
+  $("seg").onclick=e=>{const d=e.target.dataset.d; if(d!==undefined){curDir=+d;renderBuses();}};
+  renderBuses();
+  try{new QRCode($("qr"),{text:LINK,width:160,height:160});}catch(e){}
+}
+function renderBuses(){
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.r===curRoute));
+  const D=ROUTES[curRoute][curDir], st=D.stops, REF=D.ref;
+  $("seg").innerHTML=ROUTES[curRoute].map((x,i)=>`<button data-d="${i}" aria-selected="${i===curDir}">${x.name}<br><small>${x.sub}</small></button>`).join("");
+  const path=st.map((n,i)=>i===REF?`<b>🚩${n}</b>`:n).join(" › ");
+  let h=`<div class="path">${path}</div>`;
+  BUSES[key(curRoute,curDir)].forEach(b=>{
+    const L=lvl(b.pct), bi=b.no-1;
+    const rows=st.map((n,s)=>{ if(s<REF)return ""; const lc=liveCount(curRoute,curDir,bi,s);
+      const lab=s===REF?`${n} (등교 하차)`:`${s-REF}정거장 뒤 · ${n}`;
+      return `<tr><td>${lab}</td><td>${dropsOf(curRoute,curDir,bi,s)}명 하차 예정${lc?` <span class="tag">실시간 +${lc}</span>`:''}</td></tr>`;}).join("");
+    h+=`<div class="card"><div class="bus"><div class="badge ${L.cls}">${L.name}<br><small>${b.pct}%</small></div>
+      <div style="flex:1"><b>${curRoute}번 ${b.no}호차</b> · ${b.eta}분 후 도착
+      <div class="bar"><i style="width:${Math.min(b.pct,100)}%;background:${L.col}"></i></div>
+      <div class="info">${seatForecast(b,curRoute,curDir)}</div></div></div>
+      <table style="margin-top:8px">${rows}</table>`;
+    if(L.name==="만차"){
+      const a=recommend(curRoute,curDir,b);
+      h+=`<div class="warn">🚫 만차입니다. 다음 차나 다른 노선을 권장해요.</div>`;
+      if(a) h+=`<div class="rec">✅ 추천: <b>${a.route}번 ${a.no}호차</b> (${a.dirName}, ${a.eta}분 후, ${lvl(a.pct).name} ${a.pct}%)</div>`;
+    }
+    h+=`</div>`;
+  });
+  $("buses").innerHTML=h;
+  const f=$("feed"); if(f){f.innerHTML=feedHtml(); f.onclick=e=>{if(e.target.dataset.cancel)cancelMine();};}
+  setConn();
+}
+function setConn(){
+  const t=ONLINE?`● 실시간 연결됨 · 현재 접속 ${PEERS}명`:"○ 연결 안 됨 (이 기기에서만 동작) — Firebase 설정을 확인하세요";
+  const c=$("conn"); if(c)c.textContent=ONLINE?"● 실시간":"○ 오프라인";
+  const tc=$("top-conn"); if(tc){tc.textContent=t; tc.style.color=ONLINE?"var(--c1)":"var(--c4)";}
+}
+function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",2000);}
+function route(){
+  const p=location.hash==="#register"?"register":"status";
+  $("n-status").className=p==="status"?"on":""; $("n-register").className=p==="register"?"on":"";
+  p==="register"?viewRegister():viewStatus();
+}
+window.addEventListener("hashchange",route); route();
+function startLive(){
+  if(typeof firebase==="undefined"||!FIREBASE_CONFIG.databaseURL||FIREBASE_CONFIG.databaseURL.includes("여기에")){ONLINE=false;setConn();return;}
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG); FB=firebase.database();
+    FB.ref(".info/connected").on("value",sn=>{
+      ONLINE=!!sn.val();
+      if(ONLINE){const p=FB.ref("presence/"+CID); p.onDisconnect().remove(); p.set(true);}
+      setConn();
+    });
+    FB.ref("drops").on("value",sn=>{const v=sn.val()||{}; LIVE=Object.keys(v).map(k=>({id:k,...v[k]})); refresh();});
+    FB.ref("presence").on("value",sn=>{PEERS=sn.numChildren(); setConn();});
+    if(location.search.includes("admin")){
+      const n=document.querySelector(".nav"), bt=document.createElement("button");
+      bt.className="del"; bt.style.marginTop="8px"; bt.textContent="🧹 전체 초기화";
+      bt.onclick=()=>{ if(confirm("모든 등록을 삭제할까요?")) FB.ref("drops").remove(); };
+      n.after(bt);
+    }
+  }catch(e){ONLINE=false;setConn();}
+}
+function sessionStorageOk(){try{sessionStorage.getItem("x");return true;}catch(e){return false;}}
+function gate(){
+  if(sessionStorageOk()&&sessionStorage.getItem("ok")==="1"){unlock();return;}
+  const g=document.createElement("div");g.id="gate";
+  g.innerHTML=`<div class="card" style="max-width:340px;margin:20vh auto 0"><b>🔒 입장 코드</b><div class="sub">시연 참여 코드를 입력하세요</div><input id="pw" type="password" autocomplete="off" style="width:100%;padding:10px;margin-top:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--tx);font-size:15px"><button class="act" id="pwgo">입장</button><div class="note" id="pwerr"></div></div>`;
+  g.style.cssText="position:fixed;inset:0;background:var(--bg);z-index:50;padding:16px";
+  document.body.appendChild(g);
+  const go=()=>{ if($("pw").value===PASS){ try{sessionStorage.setItem("ok","1")}catch(e){} unlock(); } else $("pwerr").textContent="코드가 올바르지 않아요."; };
+  $("pwgo").onclick=go; $("pw").onkeydown=e=>{if(e.key==="Enter")go();};
+}
+function unlock(){const g=$("gate"); if(g)g.remove(); startLive();}
+gate();
+</script>
+</body>
+</html>
