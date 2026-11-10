@@ -66,11 +66,11 @@ td:last-child{text-align:right}
 <script>
 // ====== Firebase 설정: Firebase 콘솔의 값으로 교체하세요 ======
 const FIREBASE_CONFIG={
-  apiKey:"여기에 복사한 apiKey",
+  apiKey:"여기에_apiKey",
   authDomain:"busapp-a7f28.firebaseapp.com",
   databaseURL:"https://busapp-a7f28-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:"busapp-a7f28",
-  appId:"여기에 복사한 appId"
+  appId:"여기에_appId"
 };
 const LINK=location.href.split("#")[0].split("?")[0];
 // ===== 노선 설정 (국민대학교 주변 3개 노선, 방면별) =====
@@ -97,7 +97,7 @@ Object.keys(ROUTES).forEach(r=>ROUTES[r].forEach((D,d)=>{
   });
 }));
 let LIVE=[];
-const CID=Math.random().toString(36).slice(2,10); let FB=null, ONLINE=false, PEERS=0;
+const CID=Math.random().toString(36).slice(2,10); let FB=null, ONLINE=false, PEERS=0, WHY="";
 const PASS="kookmin"; // 시연 입장 코드 (여기서 변경)
 const liveCount=(r,d,bi,s)=>LIVE.filter(x=>x.route===r&&x.dir===d&&x.bus===bi&&x.stop===s).length;
 const dropsOf=(r,d,bi,s)=>BUSES[key(r,d)][bi].drops[s]+liveCount(r,d,bi,s);
@@ -213,7 +213,7 @@ function renderBuses(){
   setConn();
 }
 function setConn(){
-  const t=ONLINE?`● 실시간 연결됨 · 현재 접속 ${PEERS}명`:"○ 연결 안 됨 (이 기기에서만 동작) — Firebase 설정을 확인하세요";
+  const t=ONLINE?`● 실시간 연결됨 · 현재 접속 ${PEERS}명`:"○ 연결 안 됨 (이 기기에서만 동작) — "+(WHY||"연결 확인 중…");
   const c=$("conn"); if(c)c.textContent=ONLINE?"● 실시간":"○ 오프라인";
   const tc=$("top-conn"); if(tc){tc.textContent=t; tc.style.color=ONLINE?"var(--c1)":"var(--c4)";}
 }
@@ -225,15 +225,21 @@ function route(){
 }
 window.addEventListener("hashchange",route); route();
 function startLive(){
-  if(typeof firebase==="undefined"||!FIREBASE_CONFIG.databaseURL||FIREBASE_CONFIG.databaseURL.includes("여기에")){ONLINE=false;setConn();return;}
+  const C=FIREBASE_CONFIG;
+  if(typeof firebase==="undefined"){WHY="Firebase 스크립트를 불러오지 못했어요(인터넷/차단 확인)";setConn();return;}
+  if(!C.apiKey||C.apiKey.includes("여기에")){WHY="apiKey가 아직 입력되지 않았어요";setConn();return;}
+  if(!C.appId||C.appId.includes("여기에")){WHY="appId가 아직 입력되지 않았어요";setConn();return;}
+  if(!C.databaseURL||!/^https:\/\/.+\.(firebasedatabase\.app|firebaseio\.com)\/?$/.test(C.databaseURL)){WHY="databaseURL 형식이 올바르지 않아요";setConn();return;}
   try{
-    firebase.initializeApp(FIREBASE_CONFIG); FB=firebase.database();
+    firebase.initializeApp(C); FB=firebase.database();
+    WHY="서버 응답을 기다리는 중이에요(안 바뀌면 databaseURL·규칙 게시를 확인)";
     FB.ref(".info/connected").on("value",sn=>{
       ONLINE=!!sn.val();
-      if(ONLINE){const p=FB.ref("presence/"+CID); p.onDisconnect().remove(); p.set(true);}
+      if(ONLINE){WHY="";const p=FB.ref("presence/"+CID); p.onDisconnect().remove(); p.set(true).catch(e=>{WHY="쓰기 거부: Firebase 규칙을 게시했는지 확인하세요 ("+e.code+")";ONLINE=false;setConn();});}
       setConn();
     });
-    FB.ref("drops").on("value",sn=>{const v=sn.val()||{}; LIVE=Object.keys(v).map(k=>({id:k,...v[k]})); refresh();});
+    FB.ref("drops").on("value",sn=>{const v=sn.val()||{}; LIVE=Object.keys(v).map(k=>({id:k,...v[k]})); refresh();},
+      e=>{WHY="읽기 거부: Firebase 규칙을 확인하세요 ("+e.code+")";ONLINE=false;setConn();});
     FB.ref("presence").on("value",sn=>{PEERS=sn.numChildren(); setConn();});
     if(location.search.includes("admin")){
       const n=document.querySelector(".nav"), bt=document.createElement("button");
@@ -241,7 +247,7 @@ function startLive(){
       bt.onclick=()=>{ if(confirm("모든 등록을 삭제할까요?")) FB.ref("drops").remove(); };
       n.after(bt);
     }
-  }catch(e){ONLINE=false;setConn();}
+  }catch(e){WHY="초기화 오류: "+e.message;ONLINE=false;setConn();}
 }
 function sessionStorageOk(){try{sessionStorage.getItem("x");return true;}catch(e){return false;}}
 function gate(){
